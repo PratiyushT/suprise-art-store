@@ -1,6 +1,39 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import fetch from "node-fetch";
 
+type PexelsPhoto = {
+  id: number;
+  width: number;
+  height: number;
+  url: string;
+  photographer: string;
+  photographer_url: string;
+  photographer_id: number;
+  avg_color: string;
+  src: {
+    original: string;
+    large2x: string;
+    large: string;
+    medium: string;
+    small: string;
+    portrait: string;
+    landscape: string;
+    tiny: string;
+  };
+  alt: string;
+};
+
+type PexelsSearchResponse = {
+  total_results: number;
+  page: number;
+  per_page: number;
+  photos: PexelsPhoto[];
+  next_page?: string;
+};
+
+
+
+
 const PEXELS_API_KEY = process.env.PEXELS_KEY!;
 const SEARCH_QUERY = "art";
 const PER_PAGE = 10;
@@ -14,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: { Authorization: PEXELS_API_KEY },
     });
 
-    const data: any = await pexelsRes.json();
+    const data = (await pexelsRes.json()) as PexelsSearchResponse;
     const photos = data.photos;
     if (!photos || photos.length === 0) return res.status(404).json({ error: "No photos found" });
 
