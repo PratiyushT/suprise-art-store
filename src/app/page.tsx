@@ -2,11 +2,23 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 interface ArtworkTier {
@@ -27,8 +39,8 @@ const artworkTiers: ArtworkTier[] = [
       "Digital artwork print",
       "Artist information card",
       "Certificate of authenticity",
-      "Standard shipping"
-    ]
+      "Standard shipping",
+    ],
   },
   {
     id: "curator",
@@ -40,8 +52,8 @@ const artworkTiers: ArtworkTier[] = [
       "Artist biography & story",
       "Signed certificate",
       "Priority shipping",
-      "Collectible packaging"
-    ]
+      "Collectible packaging",
+    ],
   },
   {
     id: "collector",
@@ -54,8 +66,8 @@ const artworkTiers: ArtworkTier[] = [
       "Numbered certificate",
       "Express shipping",
       "Museum-quality materials",
-      "Protective sleeve"
-    ]
+      "Protective sleeve",
+    ],
   },
   {
     id: "masterpiece",
@@ -69,9 +81,9 @@ const artworkTiers: ArtworkTier[] = [
       "White-glove delivery",
       "Conservation-grade materials",
       "Custom display frame",
-      "Lifetime authenticity guarantee"
-    ]
-  }
+      "Lifetime authenticity guarantee",
+    ],
+  },
 ];
 
 const tipOptions = [
@@ -80,7 +92,7 @@ const tipOptions = [
   { value: "10", label: "$10" },
   { value: "15", label: "$15" },
   { value: "20", label: "$20" },
-  { value: "custom", label: "Custom amount" }
+  { value: "custom", label: "Custom amount" },
 ];
 
 export default function Home() {
@@ -91,12 +103,12 @@ export default function Home() {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const selectedArtwork = artworkTiers.find(tier => tier.id === selectedTier);
-  const tipAmount = tip === "custom" ? parseFloat(customTip) || 0 : parseFloat(tip);
+  const selectedArtwork = artworkTiers.find((tier) => tier.id === selectedTier);
+  const tipAmount =
+    tip === "custom" ? parseFloat(customTip) || 0 : parseFloat(tip);
   const totalAmount = (selectedArtwork?.price || 0) + tipAmount;
 
   const handlePurchase = async () => {
-    // Validation
     if (!selectedTier) {
       toast.error("Please select an artwork tier");
       return;
@@ -113,7 +125,10 @@ export default function Home() {
       toast.error("Please agree to the terms and conditions");
       return;
     }
-    if (tip === "custom" && (!customTip || isNaN(parseFloat(customTip)) || parseFloat(customTip) < 0)) {
+    if (
+      tip === "custom" &&
+      (!customTip || isNaN(parseFloat(customTip)) || parseFloat(customTip) < 0)
+    ) {
       toast.error("Please enter a valid tip amount");
       return;
     }
@@ -121,45 +136,51 @@ export default function Home() {
     setIsProcessing(true);
 
     try {
-      // Simulate payment processing (always approve)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Simulate payment
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Send data to Zapier via secure API route
+      const imageRes = await fetch("/api/generate-artwork"); // or generate-artwork-url
+      const imageData = await imageRes.json();
+
+      if (!imageRes.ok || !imageData.imageUrl) {
+        toast.error("Failed to fetch artwork. Please try again in a moment.");
+        return;
+      }
+      console.log("ImageURL: ", imageData.imageUrl)
+      // 2. Prepare webhook data
+      const orderId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const webhookData = {
         tier: selectedArtwork?.title,
         price: selectedArtwork?.price,
         tip: tipAmount,
         total: totalAmount,
-        email: email,
+        email,
         timestamp: new Date().toISOString(),
-        orderId: `ORDER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        customerData: {
-          email: email,
-          artworkTier: selectedArtwork?.title,
-          features: selectedArtwork?.features
-        }
+        orderId: `ORDER-${orderId}`,
+        customerEmail: email,
+        imageFile: {
+          url: imageData.imageUrl,
+          filename: `mystery-artwork-${orderId}.jpg`,
+          alt: imageData.alt,
+          photographer: imageData.photographer,
+          pexelsId: imageData.pexelsId,
+        },
       };
 
-      // Call internal API route (keeps secret key secure on server)
-      try {
-        const response = await fetch('/api/webhook', {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(webhookData),
-        });
+      // 3. Send to webhook
+      const response = await fetch("/api/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookData),
+      });
 
-        if (response.ok) {
-          console.log("✅ Order data sent to Zapier successfully");
-        } else {
-          console.warn("⚠️ Webhook API response not OK:", response.status);
-        }
-      } catch (webhookError) {
-        console.log("❌ Webhook API error:", webhookError);
+      if (!response.ok) {
+        console.warn("⚠️ Webhook failed:", response.status);
       }
 
-      toast.success("Payment successful! Your mystery artwork will be delivered to your email.");
+      toast.success(
+        "Payment successful! Your mystery artwork will be emailed shortly."
+      );
 
       // Reset form
       setSelectedTier("");
@@ -167,8 +188,8 @@ export default function Home() {
       setTip("0");
       setCustomTip("");
       setAgreeToTerms(false);
-
     } catch (error) {
+      console.error("❌ Purchase error:", error);
       toast.error("Payment failed. Please try again.");
     } finally {
       setIsProcessing(false);
@@ -183,7 +204,7 @@ export default function Home() {
           <div
             className="w-full h-full bg-repeat"
             style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             }}
           ></div>
         </div>
@@ -193,7 +214,8 @@ export default function Home() {
               Mystery Artwork Collection
             </h1>
             <p className="text-xl text-purple-100 max-w-2xl mx-auto">
-              Discover extraordinary art from talented artists around the world. Each mystery box contains a unique piece waiting to inspire you.
+              Discover extraordinary art from talented artists around the world.
+              Each mystery box contains a unique piece waiting to inspire you.
             </p>
           </div>
         </div>
@@ -202,7 +224,6 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-12">
         <div className="max-w-6xl mx-auto">
-
           {/* Artwork Tiers */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold text-center mb-8 text-slate-800 dark:text-slate-200">
@@ -214,8 +235,8 @@ export default function Home() {
                   key={tier.id}
                   className={`cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${
                     selectedTier === tier.id
-                      ? 'ring-2 ring-purple-600 shadow-lg transform -translate-y-1'
-                      : 'hover:ring-1 hover:ring-purple-300'
+                      ? "ring-2 ring-purple-600 shadow-lg transform -translate-y-1"
+                      : "hover:ring-1 hover:ring-purple-300"
                   }`}
                   onClick={() => setSelectedTier(tier.id)}
                 >
@@ -246,13 +267,15 @@ export default function Home() {
             <section className="max-w-2xl mx-auto">
               <Card className="shadow-xl">
                 <CardHeader>
-                  <CardTitle className="text-2xl text-center">Complete Your Purchase</CardTitle>
+                  <CardTitle className="text-2xl text-center">
+                    Complete Your Purchase
+                  </CardTitle>
                   <CardDescription className="text-center">
-                    You selected: <strong>{selectedArtwork?.title}</strong> - ${selectedArtwork?.price}
+                    You selected: <strong>{selectedArtwork?.title}</strong> - $
+                    {selectedArtwork?.price}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-
                   {/* Email Input */}
                   <div className="space-y-2">
                     <Label htmlFor="email">Delivery Email Address</Label>
@@ -301,11 +324,16 @@ export default function Home() {
                     <Checkbox
                       id="terms"
                       checked={agreeToTerms}
-                      onCheckedChange={(checked) => setAgreeToTerms(checked as boolean)}
+                      onCheckedChange={(checked) =>
+                        setAgreeToTerms(checked as boolean)
+                      }
                     />
                     <Label htmlFor="terms" className="text-sm">
                       I agree to the{" "}
-                      <button type="button" className="text-purple-600 hover:underline">
+                      <button
+                        type="button"
+                        className="text-purple-600 hover:underline"
+                      >
                         Terms and Conditions
                       </button>
                     </Label>
@@ -336,11 +364,14 @@ export default function Home() {
                     disabled={isProcessing}
                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 text-lg"
                   >
-                    {isProcessing ? "Processing..." : `Purchase Mystery Artwork - $${totalAmount.toFixed(2)}`}
+                    {isProcessing
+                      ? "Processing..."
+                      : `Purchase Mystery Artwork - $${totalAmount.toFixed(2)}`}
                   </Button>
 
                   <p className="text-xs text-center text-slate-500">
-                    🔒 This is a development environment. All payments are automatically approved.
+                    🔒 This is a development environment. All payments are
+                    automatically approved.
                   </p>
                 </CardContent>
               </Card>
