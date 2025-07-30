@@ -27,7 +27,10 @@ export async function POST(req: Request) {
       lineItems.push({
         price_data: {
           currency: "usd",
-          product_data: { name: "Tip" },
+          product_data: {
+            name: "Tip",
+            description: undefined
+          },
           unit_amount: tipAmount * 100,
         },
         quantity: 1,
