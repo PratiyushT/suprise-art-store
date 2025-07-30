@@ -21,197 +21,39 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-interface ArtworkTier {
-  id: string;
-  price: number;
-  title: string;
-  description: string;
-  features: string[];
-}
+import { artworkTiers, ArtworkTier } from "@libs/data/artworkTiers";
+import { tipOptions } from "@libs/data/tipOptions";
+import { usePurchase } from "@libs/hooks/usePurchase";
+import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
-const artworkTiers: ArtworkTier[] = [
-  {
-    id: "discovery",
-    price: 10,
-    title: "Discovery Collection",
-    description: "Perfect for art enthusiasts starting their collection",
-    features: [
-      "Digital artwork print",
-      "Artist information card",
-      "Certificate of authenticity",
-      "Standard shipping",
-    ],
-  },
-  {
-    id: "curator",
-    price: 20,
-    title: "Curator's Choice",
-    description: "Handpicked pieces from emerging artists",
-    features: [
-      "Premium digital artwork",
-      "Artist biography & story",
-      "Signed certificate",
-      "Priority shipping",
-      "Collectible packaging",
-    ],
-  },
-  {
-    id: "collector",
-    price: 50,
-    title: "Collector's Edition",
-    description: "Exclusive pieces from established artists",
-    features: [
-      "Limited edition artwork",
-      "Artist video message",
-      "Numbered certificate",
-      "Express shipping",
-      "Museum-quality materials",
-      "Protective sleeve",
-    ],
-  },
-  {
-    id: "masterpiece",
-    price: 100,
-    title: "Masterpiece Mystery",
-    description: "Rare and exceptional artistic creations",
-    features: [
-      "Original or rare print",
-      "Personal artist note",
-      "Premium certificate",
-      "White-glove delivery",
-      "Conservation-grade materials",
-      "Custom display frame",
-      "Lifetime authenticity guarantee",
-    ],
-  },
-];
 
-const tipOptions = [
-  { value: "0", label: "No tip" },
-  { value: "5", label: "$5" },
-  { value: "10", label: "$10" },
-  { value: "15", label: "$15" },
-  { value: "20", label: "$20" },
-  { value: "custom", label: "Custom amount" },
-];
 
 export default function Home() {
-  const [selectedTier, setSelectedTier] = useState<string>("");
+  const searchParams = useSearchParams();
+  const defaultTier = searchParams.get("tier");
+  const [selectedTier, setSelectedTier] = useState<string>(defaultTier || "");
+
+  useEffect(() => {
+  const msg = sessionStorage.getItem("toastMessage");
+  if (msg) {
+    toast.warning(msg);
+    sessionStorage.removeItem("toastMessage");
+  }
+}, []);
+
   const [email, setEmail] = useState("");
   const [tip, setTip] = useState("0");
   const [customTip, setCustomTip] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+
 
   const selectedArtwork = artworkTiers.find((tier) => tier.id === selectedTier);
   const tipAmount =
     tip === "custom" ? parseFloat(customTip) || 0 : parseFloat(tip);
   const totalAmount = (selectedArtwork?.price || 0) + tipAmount;
 
-  const handlePurchase = async () => {
-    if (!selectedTier) {
-      toast.error("Please select an artwork tier");
-      return;
-    }
-    if (!email) {
-      toast.error("Please enter your delivery email");
-      return;
-    }
-    if (!email.includes("@")) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
-    if (!agreeToTerms) {
-      toast.error("Please agree to the terms and conditions");
-      return;
-    }
-    if (
-      tip === "custom" &&
-      (!customTip || isNaN(parseFloat(customTip)) || parseFloat(customTip) < 0)
-    ) {
-      toast.error("Please enter a valid tip amount");
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const stripeSession = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tier: selectedArtwork,
-          email,
-          tipAmount,
-        }),
-      });
-
-      const sessionData = await stripeSession.json();
-
-      if (!stripeSession.ok) {
-        throw new Error("Stripe Checkout failed to initiate");
-      }
-
-      window.location.href = sessionData.sessionUrl;
-
-      const imageRes = await fetch("/api/generate-artwork"); // or generate-artwork-url
-      const imageData = await imageRes.json();
-
-      if (!imageRes.ok || !imageData.imageUrl) {
-        toast.error("Failed to fetch artwork. Please try again in a moment.");
-        return;
-      }
-      console.log("ImageURL: ", imageData.imageUrl);
-      // 2. Prepare webhook data
-      const orderId = `${Date.now()}-${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
-      const webhookData = {
-        tier: selectedArtwork?.title,
-        price: selectedArtwork?.price,
-        tip: tipAmount,
-        total: totalAmount,
-        email,
-        timestamp: new Date().toISOString(),
-        orderId: `ORDER-${orderId}`,
-        customerEmail: email,
-        imageFile: {
-          url: imageData.imageUrl,
-          filename: `mystery-artwork-${orderId}.jpg`,
-          alt: imageData.alt,
-          photographer: imageData.photographer,
-          pexelsId: imageData.pexelsId,
-        },
-      };
-
-      // 3. Send to webhook
-      const response = await fetch("/api/webhook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(webhookData),
-      });
-
-      if (!response.ok) {
-        console.warn("⚠️ Webhook failed:", response.status);
-      }
-
-      toast.success(
-        "Payment successful! Your mystery artwork will be emailed shortly."
-      );
-
-      // Reset form
-      setSelectedTier("");
-      setEmail("");
-      setTip("0");
-      setCustomTip("");
-      setAgreeToTerms(false);
-    } catch (error) {
-      console.error("❌ Purchase error:", error);
-      toast.error("Payment failed. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const { handlePurchase, isProcessing } = usePurchase();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -377,7 +219,15 @@ export default function Home() {
 
                   {/* Purchase Button */}
                   <Button
-                    onClick={handlePurchase}
+                    onClick={() =>
+                      handlePurchase({
+                        selectedTier: artworkTiers.find((t) => t.id === selectedTier),
+                        email,
+                        tip,
+                        customTip,
+                        agreeToTerms,
+                      })
+                    }
                     disabled={isProcessing}
                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 text-lg"
                   >

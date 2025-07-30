@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       line_items: lineItems,
       mode: "payment",
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/cancel`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/cancel?tier=${tier.id}&tierName=${encodeURIComponent(tier.title)}&tierPrice=${tier.price}`,
     });
 
     return NextResponse.json({ sessionUrl: session.url });
