@@ -136,8 +136,23 @@ export default function Home() {
     setIsProcessing(true);
 
     try {
-      // Simulate payment
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const stripeSession = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: selectedArtwork,
+          email,
+          tipAmount,
+        }),
+      });
+
+      const sessionData = await stripeSession.json();
+
+      if (!stripeSession.ok) {
+        throw new Error("Stripe Checkout failed to initiate");
+      }
+
+      window.location.href = sessionData.sessionUrl;
 
       const imageRes = await fetch("/api/generate-artwork"); // or generate-artwork-url
       const imageData = await imageRes.json();
@@ -146,9 +161,11 @@ export default function Home() {
         toast.error("Failed to fetch artwork. Please try again in a moment.");
         return;
       }
-      console.log("ImageURL: ", imageData.imageUrl)
+      console.log("ImageURL: ", imageData.imageUrl);
       // 2. Prepare webhook data
-      const orderId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
       const webhookData = {
         tier: selectedArtwork?.title,
         price: selectedArtwork?.price,
